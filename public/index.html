@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="Offline-first WebGPU image generator running fully in the browser." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" />
+    <link rel="stylesheet" href="./src/styles.css" />
+    <title>Impossible LLM — Local WebGPU Image Generator</title>
+  </head>
+  <body>
+    <main class="app">
+      <header class="app__header">
+        <div>
+          <h1>Impossible LLM</h1>
+          <p class="subtitle">Local WebGPU image generator (PWA, offline-ready)</p>
+        </div>
+        <div class="status">
+          <div>
+            <span class="label">WebGPU</span>
+            <span id="webgpu-status" class="pill">Checking…</span>
+          </div>
+          <div>
+            <span class="label">Profile</span>
+            <span id="profile-status" class="pill">Detecting…</span>
+          </div>
+          <div>
+            <span class="label">Model</span>
+            <span id="model-status" class="pill">Not loaded</span>
+          </div>
+          <div>
+            <span class="label">Cache</span>
+            <span id="cache-status" class="pill">—</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="panel">
+        <h2>Power profile</h2>
+        <div class="field-row">
+          <label for="power-select">Power</label>
+          <select id="power-select"></select>
+        </div>
+        <p class="hint">Higher = slower and more memory risk · Lower = faster and more stable.</p>
+        <div class="preset-row">
+          <button id="preset-fast" type="button">Fast</button>
+          <button id="preset-balanced" type="button">Balanced</button>
+          <button id="preset-best" type="button">Best possible</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Generation</h2>
+        <div class="field">
+          <label for="prompt">Prompt *</label>
+          <textarea id="prompt" rows="3" placeholder="Describe the image you want"></textarea>
+          <div class="char-count" id="prompt-count">0 / 300</div>
+        </div>
+        <div class="field">
+          <label for="negative-prompt">Negative prompt (optional)</label>
+          <textarea id="negative-prompt" rows="2" placeholder="What to avoid"></textarea>
+          <div class="char-count" id="negative-count">0 / 150</div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="resolution">Resolution</label>
+            <select id="resolution"></select>
+          </div>
+          <div class="field">
+            <label for="steps">Steps</label>
+            <select id="steps"></select>
+          </div>
+          <div class="field">
+            <label for="seed">Seed</label>
+            <div class="seed-row">
+              <input id="seed" type="number" placeholder="Auto" />
+              <button id="seed-auto" type="button">Auto</button>
+            </div>
+          </div>
+        </div>
+        <div class="button-row">
+          <button id="download-model" type="button">Download model</button>
+          <button id="generate" type="button" class="primary">Generate</button>
+          <button id="cancel" type="button" class="ghost" disabled>Cancel</button>
+        </div>
+        <div class="progress" hidden>
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div class="status-message" id="status-message"></div>
+      </section>
+
+      <section class="panel output">
+        <h2>Output</h2>
+        <div class="output__canvas">
+          <canvas id="output" width="256" height="256"></canvas>
+        </div>
+        <div class="button-row">
+          <button id="download" type="button">Download PNG</button>
+          <button id="copy" type="button">Copy to clipboard</button>
+          <button id="again" type="button">Generate again</button>
+          <button id="new-seed" type="button">Generate new seed</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Storage</h2>
+        <div class="button-row">
+          <button id="clear-model" type="button">Clear model cache</button>
+          <button id="clear-all" type="button" class="ghost">Clear all app data</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Device notes</h2>
+        <ul class="notes">
+          <li>Runs fully offline after first load (PWA + CacheStorage).</li>
+          <li>Falls back to safer settings on errors or timeouts.</li>
+          <li>No data leaves your device — no analytics, no servers.</li>
+        </ul>
+      </section>
+    </main>
+
+    <dialog id="timeout-dialog">
+      <h3>Generation took too long</h3>
+      <p>Choose how to proceed.</p>
+      <div class="dialog-actions">
+        <button id="timeout-reduce" type="button">Reduce settings & retry</button>
+        <button id="timeout-retry" type="button">Retry</button>
+        <button id="timeout-cancel" type="button" class="ghost">Cancel</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
