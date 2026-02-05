@@ -14,7 +14,10 @@ A fully static, offline-capable PWA that generates images **locally in the brows
 
 ```
 /src
-/public
+/index.html
+/icon.svg
+/manifest.webmanifest
+/sw.js
 /models
 .github/workflows/pages.yml
 README.md
