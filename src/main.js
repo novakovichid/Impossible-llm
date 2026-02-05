@@ -1,14 +1,22 @@
-import { MODEL_CACHE, MODEL_URL, PROFILE_LIMITS, PROFILES } from "./constants.js";
+import {
+  DEFAULT_MODEL_ID,
+  MODEL_CACHE,
+  MODEL_CATALOG,
+  PROFILE_LIMITS,
+  PROFILES,
+} from "./constants.js";
 import { state } from "./state.js";
 import {
   applyProfile,
   clampText,
   populateProfileSelect,
   populateResolutionAndSteps,
+  populateModelSelect,
+  renderModelList,
   setMessage,
   setPreset,
-  setStatus,
   ui,
+  updateModelDescription,
   updateCharCounts,
 } from "./ui.js";
 
@@ -48,6 +56,27 @@ function formatBytes(bytes) {
   const value = bytes / 1024 ** index;
   const precision = value >= 100 ? 0 : value >= 10 ? 1 : 2;
   return `${value.toFixed(precision)} ${units[index]}`;
+}
+
+/**
+ * Resolve the active model from the catalog.
+ * @returns {{id: string, name: string, url: string, sizeHint: string, description: string, strength: string}}
+ */
+function getSelectedModel() {
+  return MODEL_CATALOG.find((model) => model.id === state.selectedModelId) ?? MODEL_CATALOG[0];
+}
+
+/**
+ * Update the model status pill based on cached state.
+ * @returns {Promise<void>}
+ */
+async function updateModelStatus() {
+  const model = getSelectedModel();
+  const cache = await caches.open(MODEL_CACHE);
+  const cached = await cache.match(model.url);
+  ui.modelStatus.textContent = cached
+    ? `Cached (${model.name})`
+    : `Not loaded (${model.name})`;
 }
 
 /**
@@ -105,10 +134,11 @@ async function updateCacheStatus() {
  * @returns {Promise<Response>}
  */
 async function ensureModelCached() {
+  const model = getSelectedModel();
   const cache = await caches.open(MODEL_CACHE);
-  const cached = await cache.match(MODEL_URL);
+  const cached = await cache.match(model.url);
   if (cached) {
-    ui.modelStatus.textContent = "Cached";
+    await updateModelStatus();
     await updateCacheStatus();
     return cached;
   }
@@ -120,16 +150,17 @@ async function ensureModelCached() {
  * @returns {Promise<void>}
  */
 async function downloadModel() {
-  setMessage("Downloading model…");
-  const response = await fetch(MODEL_URL, { cache: "no-store" });
+  const model = getSelectedModel();
+  setMessage(`Downloading ${model.name} model…`);
+  const response = await fetch(model.url, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Failed to download model");
   }
   const cache = await caches.open(MODEL_CACHE);
-  await cache.put(MODEL_URL, response.clone());
-  ui.modelStatus.textContent = "Cached";
+  await cache.put(model.url, response.clone());
+  await updateModelStatus();
   await updateCacheStatus();
-  setMessage("Model cached for offline use.");
+  setMessage(`${model.name} model cached for offline use.`);
 }
 
 /**
@@ -137,17 +168,22 @@ async function downloadModel() {
  * @returns {Promise<void>}
  */
 async function updateModelSize() {
+  const model = getSelectedModel();
+  const fallbackLabel = `Download ${model.name} model (${model.sizeHint})`;
   try {
-    const response = await fetch(MODEL_URL, { method: "HEAD" });
+    const response = await fetch(model.url, { method: "HEAD" });
     if (!response.ok) return;
     const size = Number(response.headers.get("content-length"));
     if (Number.isFinite(size)) {
       const sizeMb = (size / 1024 / 1024).toFixed(2);
-      ui.downloadModel.textContent = `Download model (${sizeMb} MB)`;
+      ui.downloadModel.textContent = `Download ${model.name} model (${sizeMb} MB)`;
+      return;
     }
   } catch {
-    ui.downloadModel.textContent = "Download model";
+    ui.downloadModel.textContent = fallbackLabel;
+    return;
   }
+  ui.downloadModel.textContent = fallbackLabel;
 }
 
 /**
@@ -300,6 +336,15 @@ function resetProgress() {
 function updateDeviceProfileHint() {
   if (!ui.deviceProfileHint) return;
   ui.deviceProfileHint.textContent = `Detected device profile: ${state.deviceProfile}. You can override it if your hardware can handle more.`;
+}
+
+/**
+ * Sync model selector UI with the selected model.
+ */
+function updateModelUi() {
+  const model = getSelectedModel();
+  updateModelDescription(model);
+  renderModelList(MODEL_CATALOG);
 }
 
 /**
@@ -621,6 +666,12 @@ function wireEvents() {
       setMessage(`Download failed: ${error.message}`);
     }
   });
+  ui.modelSelect.addEventListener("change", async (event) => {
+    state.selectedModelId = event.target.value;
+    updateModelUi();
+    await updateModelStatus();
+    await updateModelSize();
+  });
   ui.generate.addEventListener("click", () => {
     runGenerationFlow({ retryOnFailure: true });
   });
@@ -645,7 +696,7 @@ function wireEvents() {
   });
   ui.clearModel.addEventListener("click", async () => {
     await caches.delete(MODEL_CACHE);
-    ui.modelStatus.textContent = "Not loaded";
+    await updateModelStatus();
     await updateCacheStatus();
     setMessage("Model cache cleared.");
   });
@@ -653,7 +704,7 @@ function wireEvents() {
     await caches
       .keys()
       .then((keys) => Promise.all(keys.map((key) => caches.delete(key))));
-    ui.modelStatus.textContent = "Not loaded";
+    await updateModelStatus();
     await updateCacheStatus();
     setMessage("All app data cleared.");
   });
@@ -695,6 +746,9 @@ async function init() {
   registerServiceWorker();
   wireEvents();
   updateCharCounts();
+  state.selectedModelId = DEFAULT_MODEL_ID;
+  populateModelSelect(MODEL_CATALOG);
+  updateModelUi();
   updateModelSize();
 
   const webgpuReady = await initWebGPU();
@@ -714,7 +768,7 @@ async function init() {
   try {
     await ensureModelCached();
   } catch {
-    ui.modelStatus.textContent = "Not loaded";
+    await updateModelStatus();
   }
 
   if (document.visibilityState === "hidden") {

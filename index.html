@@ -55,6 +55,18 @@
       <section class="panel">
         <h2>Generation</h2>
         <div class="field">
+          <label for="model-select">Model strength</label>
+          <select id="model-select"></select>
+          <p class="hint" id="model-description"></p>
+        </div>
+        <div class="model-info">
+          <p class="hint">
+            Stronger models produce more coherent images. Use Tiny only for quick tests if you
+            keep seeing noise.
+          </p>
+          <ul class="model-list" id="model-list"></ul>
+        </div>
+        <div class="field">
           <label for="prompt">Prompt *</label>
           <textarea id="prompt" rows="3" placeholder="Describe the image you want"></textarea>
           <div class="char-count" id="prompt-count">0 / 300</div>

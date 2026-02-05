@@ -8,12 +8,14 @@
  *  currentSeed: number | null,
  *  cancelRequested: boolean,
  *  cancelReason: string,
- *  latestImageBitmap: ImageBitmap | null
+ *  latestImageBitmap: ImageBitmap | null,
+ *  selectedModelId: string
  * }}
  */
 export const state = {
   deviceProfile: "UltraLow",
   selectedProfile: "UltraLow",
+  selectedModelId: "tiny",
   gpuDevice: null,
   gpuAdapter: null,
   currentSeed: null,

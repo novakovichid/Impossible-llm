@@ -166,6 +166,37 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.model-info {
+  margin-bottom: 12px;
+}
+
+.model-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 6px;
+}
+
+.model-list li {
+  background: #0f172a;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.model-list li strong {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.model-list li.active {
+  border-color: #38bdf8;
+  color: #cbd5f5;
+}
+
 .progress {
   width: 100%;
   height: 8px;
