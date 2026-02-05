@@ -43,6 +43,7 @@
           <label for="power-select">Power</label>
           <select id="power-select"></select>
         </div>
+        <p class="hint" id="device-profile-hint"></p>
         <p class="hint">Higher = slower and more memory risk · Lower = faster and more stable.</p>
         <div class="preset-row">
           <button id="preset-fast" type="button">Fast</button>
@@ -80,6 +81,7 @@
             </div>
           </div>
         </div>
+        <p class="warning" id="performance-warning" hidden></p>
         <div class="button-row">
           <button id="download-model" type="button">Download model</button>
           <button id="generate" type="button" class="primary">Generate</button>
@@ -106,6 +108,16 @@
 
       <section class="panel">
         <h2>Storage</h2>
+        <div class="storage-metrics">
+          <div>
+            <span class="label">Model cache</span>
+            <span id="cache-details" class="pill">—</span>
+          </div>
+          <div>
+            <span class="label">Total storage used</span>
+            <span id="storage-details" class="pill">—</span>
+          </div>
+        </div>
         <div class="button-row">
           <button id="clear-model" type="button">Clear model cache</button>
           <button id="clear-all" type="button" class="ghost">Clear all app data</button>
