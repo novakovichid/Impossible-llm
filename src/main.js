@@ -1,161 +1,16 @@
-const ui = {
-  webgpuStatus: document.getElementById("webgpu-status"),
-  profileStatus: document.getElementById("profile-status"),
-  modelStatus: document.getElementById("model-status"),
-  cacheStatus: document.getElementById("cache-status"),
-  powerSelect: document.getElementById("power-select"),
-  prompt: document.getElementById("prompt"),
-  promptCount: document.getElementById("prompt-count"),
-  negativePrompt: document.getElementById("negative-prompt"),
-  negativeCount: document.getElementById("negative-count"),
-  resolution: document.getElementById("resolution"),
-  steps: document.getElementById("steps"),
-  seed: document.getElementById("seed"),
-  seedAuto: document.getElementById("seed-auto"),
-  downloadModel: document.getElementById("download-model"),
-  generate: document.getElementById("generate"),
-  cancel: document.getElementById("cancel"),
-  progress: document.querySelector(".progress"),
-  progressBar: document.getElementById("progress-bar"),
-  statusMessage: document.getElementById("status-message"),
-  output: document.getElementById("output"),
-  download: document.getElementById("download"),
-  copy: document.getElementById("copy"),
-  again: document.getElementById("again"),
-  newSeed: document.getElementById("new-seed"),
-  clearModel: document.getElementById("clear-model"),
-  clearAll: document.getElementById("clear-all"),
-  presetFast: document.getElementById("preset-fast"),
-  presetBalanced: document.getElementById("preset-balanced"),
-  presetBest: document.getElementById("preset-best"),
-  timeoutDialog: document.getElementById("timeout-dialog"),
-  timeoutReduce: document.getElementById("timeout-reduce"),
-  timeoutRetry: document.getElementById("timeout-retry"),
-  timeoutCancel: document.getElementById("timeout-cancel"),
-};
-
-const PROFILES = ["UltraLow", "Low", "Medium", "High"];
-const PROFILE_LIMITS = {
-  UltraLow: {
-    resolutions: [256, 320],
-    steps: [1, 2, 3, 4],
-    promptLimit: 300,
-    negativeLimit: 150,
-    timeoutMs: 60000,
-  },
-  Low: {
-    resolutions: [256, 384],
-    steps: [2, 3, 4, 5, 6],
-    promptLimit: 400,
-    negativeLimit: 200,
-    timeoutMs: 90000,
-  },
-  Medium: {
-    resolutions: [256, 384, 512],
-    steps: [4, 6, 8, 10, 12],
-    promptLimit: 600,
-    negativeLimit: 300,
-    timeoutMs: 120000,
-  },
-  High: {
-    resolutions: [256, 384, 512, 768],
-    steps: [6, 8, 10, 12, 15, 20],
-    promptLimit: 800,
-    negativeLimit: 400,
-    timeoutMs: 120000,
-  },
-};
-
-const MODEL_URL = "./models/tiny-model.bin";
-const MODEL_CACHE = "model-cache";
-
-let deviceProfile = "UltraLow";
-let selectedProfile = "UltraLow";
-let gpuDevice = null;
-let gpuAdapter = null;
-let currentSeed = null;
-let cancelRequested = false;
-let cancelReason = "";
-let latestImageBitmap = null;
-
-function setStatus(element, text, type = "") {
-  element.textContent = text;
-  element.dataset.type = type;
-}
-
-function updateCharCounts() {
-  const limits = PROFILE_LIMITS[selectedProfile];
-  ui.promptCount.textContent = `${ui.prompt.value.length} / ${limits.promptLimit}`;
-  ui.negativeCount.textContent = `${ui.negativePrompt.value.length} / ${limits.negativeLimit}`;
-}
-
-function clampText() {
-  const limits = PROFILE_LIMITS[selectedProfile];
-  if (ui.prompt.value.length > limits.promptLimit) {
-    ui.prompt.value = ui.prompt.value.slice(0, limits.promptLimit);
-  }
-  if (ui.negativePrompt.value.length > limits.negativeLimit) {
-    ui.negativePrompt.value = ui.negativePrompt.value.slice(0, limits.negativeLimit);
-  }
-  updateCharCounts();
-}
-
-function setMessage(message, tone = "") {
-  ui.statusMessage.textContent = message;
-  ui.statusMessage.dataset.tone = tone;
-}
-
-function populateProfileSelect() {
-  ui.powerSelect.innerHTML = "";
-  const maxIndex = PROFILES.indexOf(deviceProfile);
-  PROFILES.slice(0, maxIndex + 1).forEach((profile) => {
-    const option = document.createElement("option");
-    option.value = profile;
-    option.textContent = profile;
-    ui.powerSelect.append(option);
-  });
-  ui.powerSelect.value = selectedProfile;
-}
-
-function populateResolutionAndSteps() {
-  const limits = PROFILE_LIMITS[selectedProfile];
-  ui.resolution.innerHTML = "";
-  limits.resolutions.forEach((res) => {
-    const option = document.createElement("option");
-    option.value = res;
-    option.textContent = `${res}x${res}`;
-    ui.resolution.append(option);
-  });
-  ui.steps.innerHTML = "";
-  limits.steps.forEach((step) => {
-    const option = document.createElement("option");
-    option.value = step;
-    option.textContent = `${step}`;
-    ui.steps.append(option);
-  });
-}
-
-function applyProfile(profile) {
-  selectedProfile = profile;
-  ui.profileStatus.textContent = profile;
-  populateProfileSelect();
-  populateResolutionAndSteps();
-  clampText();
-}
-
-function setPreset(type) {
-  const limits = PROFILE_LIMITS[selectedProfile];
-  if (type === "fast") {
-    ui.resolution.value = limits.resolutions[0];
-    ui.steps.value = limits.steps[0];
-  } else if (type === "balanced") {
-    ui.resolution.value = limits.resolutions[Math.floor(limits.resolutions.length / 2)];
-    ui.steps.value = limits.steps[Math.floor(limits.steps.length / 2)];
-  } else if (type === "best") {
-    ui.resolution.value = limits.resolutions[limits.resolutions.length - 1];
-    ui.steps.value = limits.steps[limits.steps.length - 1];
-  }
-}
+import { MODEL_CACHE, MODEL_URL, PROFILE_LIMITS } from "./constants.js";
+import { state } from "./state.js";
+import {
+  applyProfile,
+  clampText,
+  populateProfileSelect,
+  populateResolutionAndSteps,
+  setMessage,
+  setPreset,
+  setStatus,
+  ui,
+  updateCharCounts,
+} from "./ui.js";
 
 function randomSeed() {
   return Math.floor(Math.random() * 2 ** 31);
@@ -237,13 +92,13 @@ async function initWebGPU() {
   }
 
   try {
-    gpuAdapter = await navigator.gpu.requestAdapter();
-    if (!gpuAdapter) {
+    state.gpuAdapter = await navigator.gpu.requestAdapter();
+    if (!state.gpuAdapter) {
       ui.webgpuStatus.textContent = "Unavailable";
       ui.profileStatus.textContent = "Adapter not found";
       return false;
     }
-    gpuDevice = await gpuAdapter.requestDevice();
+    state.gpuDevice = await state.gpuAdapter.requestDevice();
     ui.webgpuStatus.textContent = "Available";
     return true;
   } catch (error) {
@@ -255,15 +110,15 @@ async function initWebGPU() {
 }
 
 async function runSelfTest() {
-  if (!gpuDevice) return { score: 0 };
+  if (!state.gpuDevice) return { score: 0 };
   const start = performance.now();
   const size = 64;
   const bufferSize = size * size * 4;
-  const buffer = gpuDevice.createBuffer({
+  const buffer = state.gpuDevice.createBuffer({
     size: bufferSize,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
   });
-  const readBuffer = gpuDevice.createBuffer({
+  const readBuffer = state.gpuDevice.createBuffer({
     size: bufferSize,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   });
@@ -276,24 +131,24 @@ async function runSelfTest() {
       outData[idx] = (idx * 1664525u + 1013904223u);
     }
   `;
-  const module = gpuDevice.createShaderModule({ code: shaderCode });
-  const pipeline = gpuDevice.createComputePipeline({
+  const module = state.gpuDevice.createShaderModule({ code: shaderCode });
+  const pipeline = state.gpuDevice.createComputePipeline({
     layout: "auto",
     compute: { module, entryPoint: "main" },
   });
-  const bindGroup = gpuDevice.createBindGroup({
+  const bindGroup = state.gpuDevice.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [{ binding: 0, resource: { buffer } }],
   });
-  const encoder = gpuDevice.createCommandEncoder();
+  const encoder = state.gpuDevice.createCommandEncoder();
   const pass = encoder.beginComputePass();
   pass.setPipeline(pipeline);
   pass.setBindGroup(0, bindGroup);
   pass.dispatchWorkgroups(Math.ceil(size / 8), Math.ceil(size / 8));
   pass.end();
   encoder.copyBufferToBuffer(buffer, 0, readBuffer, 0, bufferSize);
-  gpuDevice.queue.submit([encoder.finish()]);
-  await gpuDevice.queue.onSubmittedWorkDone();
+  state.gpuDevice.queue.submit([encoder.finish()]);
+  await state.gpuDevice.queue.onSubmittedWorkDone();
   const end = performance.now();
   readBuffer.destroy();
   buffer.destroy();
@@ -324,9 +179,9 @@ function estimateProfile(selfTestMs, maxBufferSize) {
 }
 
 async function detectProfile() {
-  if (!gpuDevice) return "UltraLow";
+  if (!state.gpuDevice) return "UltraLow";
   const selfTest = await runSelfTest();
-  const maxBufferSize = gpuAdapter.limits.maxBufferSize || 0;
+  const maxBufferSize = state.gpuAdapter.limits.maxBufferSize || 0;
   return estimateProfile(selfTest.score, maxBufferSize);
 }
 
@@ -341,26 +196,26 @@ function resetProgress() {
 }
 
 async function generateImage({ resolution, steps, seed }) {
-  if (!gpuDevice) {
+  if (!state.gpuDevice) {
     throw new Error("WebGPU device not available");
   }
-  cancelRequested = false;
-  cancelReason = "";
+  state.cancelRequested = false;
+  state.cancelReason = "";
   ui.cancel.disabled = false;
   updateProgress(5);
 
   const pixelCount = resolution * resolution;
   const bufferSize = pixelCount * 4;
 
-  const storageBuffer = gpuDevice.createBuffer({
+  const storageBuffer = state.gpuDevice.createBuffer({
     size: bufferSize,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
   });
-  const readBuffer = gpuDevice.createBuffer({
+  const readBuffer = state.gpuDevice.createBuffer({
     size: bufferSize,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   });
-  const paramsBuffer = gpuDevice.createBuffer({
+  const paramsBuffer = state.gpuDevice.createBuffer({
     size: 16,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
@@ -394,12 +249,12 @@ async function generateImage({ resolution, steps, seed }) {
     }
   `;
 
-  const shaderModule = gpuDevice.createShaderModule({ code: shaderCode });
-  const pipeline = gpuDevice.createComputePipeline({
+  const shaderModule = state.gpuDevice.createShaderModule({ code: shaderCode });
+  const pipeline = state.gpuDevice.createComputePipeline({
     layout: "auto",
     compute: { module: shaderModule, entryPoint: "main" },
   });
-  const bindGroup = gpuDevice.createBindGroup({
+  const bindGroup = state.gpuDevice.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [
       { binding: 0, resource: { buffer: storageBuffer } },
@@ -410,13 +265,13 @@ async function generateImage({ resolution, steps, seed }) {
   const workgroups = Math.ceil(resolution / 8);
 
   for (let step = 1; step <= steps; step += 1) {
-    if (cancelRequested) {
+    if (state.cancelRequested) {
       break;
     }
     const params = new Uint32Array([resolution, resolution, seed, step]);
-    gpuDevice.queue.writeBuffer(paramsBuffer, 0, params);
+    state.gpuDevice.queue.writeBuffer(paramsBuffer, 0, params);
 
-    const encoder = gpuDevice.createCommandEncoder();
+    const encoder = state.gpuDevice.createCommandEncoder();
     const pass = encoder.beginComputePass();
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
@@ -425,18 +280,18 @@ async function generateImage({ resolution, steps, seed }) {
     if (step === steps) {
       encoder.copyBufferToBuffer(storageBuffer, 0, readBuffer, 0, bufferSize);
     }
-    gpuDevice.queue.submit([encoder.finish()]);
-    await gpuDevice.queue.onSubmittedWorkDone();
+    state.gpuDevice.queue.submit([encoder.finish()]);
+    await state.gpuDevice.queue.onSubmittedWorkDone();
     updateProgress(5 + Math.round((step / steps) * 95));
   }
 
   ui.cancel.disabled = true;
 
-  if (cancelRequested) {
+  if (state.cancelRequested) {
     storageBuffer.destroy();
     readBuffer.destroy();
     paramsBuffer.destroy();
-    if (cancelReason === "timeout") {
+    if (state.cancelReason === "timeout") {
       throw new Error("Generation timed out");
     }
     throw new Error("Generation cancelled");
@@ -461,12 +316,12 @@ async function generateImage({ resolution, steps, seed }) {
   readBuffer.destroy();
   paramsBuffer.destroy();
 
-  latestImageBitmap = await createImageBitmap(canvas);
+  state.latestImageBitmap = await createImageBitmap(canvas);
   resetProgress();
 }
 
 function degradeSettings() {
-  const limits = PROFILE_LIMITS[selectedProfile];
+  const limits = PROFILE_LIMITS[state.selectedProfile];
   const currentRes = Number(ui.resolution.value);
   const currentSteps = Number(ui.steps.value);
   const lowerRes = limits.resolutions.find((res) => res < currentRes);
@@ -497,15 +352,15 @@ async function runGenerationFlow({ retryOnFailure }) {
   const resolution = Number(ui.resolution.value);
   const steps = Number(ui.steps.value);
   const seed = getSeed();
-  currentSeed = seed;
+  state.currentSeed = seed;
   ui.seed.value = seed;
 
-  const timeoutMs = PROFILE_LIMITS[selectedProfile].timeoutMs;
+  const timeoutMs = PROFILE_LIMITS[state.selectedProfile].timeoutMs;
   let timedOut = false;
   const timeoutId = window.setTimeout(() => {
     timedOut = true;
-    cancelRequested = true;
-    cancelReason = "timeout";
+    state.cancelRequested = true;
+    state.cancelReason = "timeout";
     ui.timeoutDialog.showModal();
   }, timeoutMs);
 
@@ -520,7 +375,7 @@ async function runGenerationFlow({ retryOnFailure }) {
     }
   } catch (error) {
     setMessage(`Generation error: ${error.message}`);
-    if (retryOnFailure && cancelReason !== "user") {
+    if (retryOnFailure && state.cancelReason !== "user") {
       degradeSettings();
       setMessage("Retrying with reduced settings…");
       await runGenerationFlow({ retryOnFailure: false });
@@ -538,7 +393,7 @@ async function runGenerationFlow({ retryOnFailure }) {
 }
 
 async function copyToClipboard() {
-  if (!latestImageBitmap) {
+  if (!state.latestImageBitmap) {
     setMessage("Nothing to copy yet.");
     return;
   }
@@ -597,18 +452,18 @@ function wireEvents() {
     runGenerationFlow({ retryOnFailure: true });
   });
   ui.cancel.addEventListener("click", () => {
-    cancelRequested = true;
-    cancelReason = "user";
+    state.cancelRequested = true;
+    state.cancelReason = "user";
     setMessage("Cancelling…");
   });
   ui.download.addEventListener("click", downloadImage);
   ui.copy.addEventListener("click", copyToClipboard);
   ui.again.addEventListener("click", () => {
-    if (currentSeed === null) {
+    if (state.currentSeed === null) {
       runGenerationFlow({ retryOnFailure: true });
       return;
     }
-    ui.seed.value = currentSeed;
+    ui.seed.value = state.currentSeed;
     runGenerationFlow({ retryOnFailure: true });
   });
   ui.newSeed.addEventListener("click", () => {
@@ -642,8 +497,8 @@ function wireEvents() {
   });
   ui.timeoutCancel.addEventListener("click", () => {
     ui.timeoutDialog.close();
-    cancelRequested = true;
-    cancelReason = "user";
+    state.cancelRequested = true;
+    state.cancelReason = "user";
     setMessage("Generation cancelled.");
   });
 }
@@ -660,10 +515,10 @@ async function init() {
     ui.generate.disabled = true;
     return;
   }
-  deviceProfile = await detectProfile();
-  selectedProfile = deviceProfile;
-  applyProfile(selectedProfile);
-  ui.profileStatus.textContent = `${selectedProfile} (auto)`;
+  state.deviceProfile = await detectProfile();
+  state.selectedProfile = state.deviceProfile;
+  applyProfile(state.selectedProfile);
+  ui.profileStatus.textContent = `${state.selectedProfile} (auto)`;
   await updateCacheStatus();
 
   try {
@@ -673,12 +528,12 @@ async function init() {
   }
 
   if (document.visibilityState === "hidden") {
-    cancelRequested = true;
+    state.cancelRequested = true;
   }
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
-      cancelRequested = true;
+      state.cancelRequested = true;
       setMessage("Tab hidden — generation cancelled to save memory.");
     }
   });

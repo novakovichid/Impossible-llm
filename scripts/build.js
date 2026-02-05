@@ -9,7 +9,10 @@ if (existsSync(dist)) {
 }
 mkdirSync(dist, { recursive: true });
 
-cpSync(resolve(root, "public"), dist, { recursive: true });
+cpSync(resolve(root, "index.html"), resolve(dist, "index.html"));
+cpSync(resolve(root, "icon.svg"), resolve(dist, "icon.svg"));
+cpSync(resolve(root, "manifest.webmanifest"), resolve(dist, "manifest.webmanifest"));
+cpSync(resolve(root, "sw.js"), resolve(dist, "sw.js"));
 cpSync(resolve(root, "src"), resolve(dist, "src"), { recursive: true });
 cpSync(resolve(root, "models"), resolve(dist, "models"), { recursive: true });
 
