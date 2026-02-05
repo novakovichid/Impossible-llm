@@ -40,6 +40,34 @@ export const PROFILE_LIMITS = {
 };
 
 /** @type {string} */
-export const MODEL_URL = "./models/tiny-model.bin";
+export const MODEL_CATALOG = [
+  {
+    id: "tiny",
+    name: "Tiny",
+    strength: "Low",
+    sizeHint: "~15 MB",
+    url: "./models/tiny-model.bin",
+    description: "Fastest option for quick previews. Expect more noise and weak structure.",
+  },
+  {
+    id: "base",
+    name: "Base",
+    strength: "Medium",
+    sizeHint: "~150 MB",
+    url: "./models/base-model.bin",
+    description: "Balanced quality with better coherence and fewer artifacts.",
+  },
+  {
+    id: "xl",
+    name: "XL",
+    strength: "High",
+    sizeHint: "~600 MB",
+    url: "./models/xl-model.bin",
+    description: "Best clarity and detail, but the slowest and most memory-hungry.",
+  },
+];
+
+/** @type {string} */
+export const DEFAULT_MODEL_ID = "tiny";
 /** @type {string} */
 export const MODEL_CACHE = "model-cache";

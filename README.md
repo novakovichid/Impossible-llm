@@ -81,7 +81,7 @@ Push to `main` and GitHub Pages will deploy automatically.
   - Mobile profiles: 60 seconds
   - Desktop profiles: 120 seconds
 
-## Model Replacement
+## Model Catalog & Replacement
 
 The default model placeholder lives at:
 
@@ -89,10 +89,10 @@ The default model placeholder lives at:
 /models/tiny-model.bin
 ```
 
-To replace the model:
+To add or replace models:
 
 1. Drop your WebGPU-compatible model file into `/models/`.
-2. Update `MODEL_URL` in `src/main.js` to point at the new file.
+2. Update `MODEL_CATALOG` in `src/constants.js` with the model URL, strength, and description.
 3. Rebuild with `npm run build`.
 
 ## Limitations

@@ -19,6 +19,9 @@ export const ui = {
   performanceWarning: document.getElementById("performance-warning"),
   seed: document.getElementById("seed"),
   seedAuto: document.getElementById("seed-auto"),
+  modelSelect: document.getElementById("model-select"),
+  modelDescription: document.getElementById("model-description"),
+  modelList: document.getElementById("model-list"),
   downloadModel: document.getElementById("download-model"),
   generate: document.getElementById("generate"),
   cancel: document.getElementById("cancel"),
@@ -98,6 +101,52 @@ export function populateProfileSelect() {
     ui.powerSelect.append(option);
   });
   ui.powerSelect.value = state.selectedProfile;
+}
+
+/**
+ * Populate model options based on the catalog.
+ * @param {{id: string, name: string, strength: string}[]} models
+ */
+export function populateModelSelect(models) {
+  ui.modelSelect.innerHTML = "";
+  models.forEach((model) => {
+    const option = document.createElement("option");
+    option.value = model.id;
+    option.textContent = `${model.name} (${model.strength})`;
+    ui.modelSelect.append(option);
+  });
+  ui.modelSelect.value = state.selectedModelId;
+}
+
+/**
+ * Render the model descriptions list.
+ * @param {{id: string, name: string, strength: string, description: string}[]} models
+ */
+export function renderModelList(models) {
+  if (!ui.modelList) return;
+  ui.modelList.innerHTML = "";
+  models.forEach((model) => {
+    const item = document.createElement("li");
+    item.dataset.modelId = model.id;
+    if (model.id === state.selectedModelId) {
+      item.classList.add("active");
+    }
+    const title = document.createElement("strong");
+    title.textContent = `${model.name} · ${model.strength}`;
+    const details = document.createElement("span");
+    details.textContent = ` — ${model.description}`;
+    item.append(title, details);
+    ui.modelList.append(item);
+  });
+}
+
+/**
+ * Update the selected model description text.
+ * @param {{description: string}} model
+ */
+export function updateModelDescription(model) {
+  if (!ui.modelDescription) return;
+  ui.modelDescription.textContent = model.description;
 }
 
 /**
