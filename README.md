@@ -10,6 +10,22 @@ A fully static, offline-capable PWA that generates images **locally in the brows
 - Offline-first PWA with cached assets and model file.
 - Manual cache controls for model and app data.
 
+## User Guide
+
+1. **Download the model** using the “Download model” button.
+2. **Pick a power profile** in the Power panel.
+   - The app auto-detects a safe profile, but you can override it if your hardware can handle more.
+3. **Tune resolution + steps** in the Generation panel.
+   - More steps increase quality, but they also increase runtime and memory pressure.
+   - If the app shows a performance warning, the chosen settings exceed the detected safe limits.
+4. **Generate** and export results with Download/Copy.
+
+### Storage & cache
+
+- **Model cache** shows the size of the cached model file.
+- **Total storage used** shows overall browser storage usage and quota (when available).
+- Use “Clear model cache” to remove the model only, or “Clear all app data” to reset everything.
+
 ## Repository Structure
 
 ```

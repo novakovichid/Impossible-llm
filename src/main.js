@@ -1,4 +1,4 @@
-import { MODEL_CACHE, MODEL_URL, PROFILE_LIMITS } from "./constants.js";
+import { MODEL_CACHE, MODEL_URL, PROFILE_LIMITS, PROFILES } from "./constants.js";
 import { state } from "./state.js";
 import {
   applyProfile,
@@ -12,10 +12,18 @@ import {
   updateCharCounts,
 } from "./ui.js";
 
+/**
+ * Generate a random seed within 32-bit signed integer range.
+ * @returns {number}
+ */
 function randomSeed() {
   return Math.floor(Math.random() * 2 ** 31);
 }
 
+/**
+ * Resolve a numeric seed from input or generate one.
+ * @returns {number}
+ */
 function getSeed() {
   const value = Number(ui.seed.value);
   if (Number.isFinite(value) && ui.seed.value !== "") {
@@ -24,24 +32,78 @@ function getSeed() {
   return randomSeed();
 }
 
+/**
+ * Format a byte count for display.
+ * @param {number} bytes
+ * @returns {string}
+ */
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) return "—";
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1
+  );
+  const value = bytes / 1024 ** index;
+  const precision = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(precision)} ${units[index]}`;
+}
+
+/**
+ * Update cache and storage metrics.
+ * @returns {Promise<void>}
+ */
 async function updateCacheStatus() {
   const cache = await caches.open(MODEL_CACHE);
   const keys = await cache.keys();
   if (keys.length === 0) {
     ui.cacheStatus.textContent = "0 MB";
+    if (ui.cacheDetails) {
+      ui.cacheDetails.textContent = "0 MB";
+    }
+    if (ui.storageDetails) {
+      const estimate = await navigator.storage?.estimate?.();
+      if (estimate) {
+        ui.storageDetails.textContent = `${formatBytes(estimate.usage)} / ${formatBytes(
+          estimate.quota
+        )}`;
+      } else {
+        ui.storageDetails.textContent = "Unavailable";
+      }
+    }
     return;
   }
   let totalSize = 0;
+  let sizeKnown = false;
   for (const request of keys) {
     const response = await cache.match(request);
     if (response?.headers?.get("content-length")) {
       totalSize += Number(response.headers.get("content-length"));
+      sizeKnown = true;
     }
   }
-  const sizeMb = (totalSize / 1024 / 1024).toFixed(2);
-  ui.cacheStatus.textContent = `${sizeMb} MB`;
+  const cacheDisplay = sizeKnown ? formatBytes(totalSize) : "Unknown";
+  ui.cacheStatus.textContent = cacheDisplay;
+  if (ui.cacheDetails) {
+    ui.cacheDetails.textContent = cacheDisplay;
+  }
+  if (ui.storageDetails) {
+    const estimate = await navigator.storage?.estimate?.();
+    if (estimate) {
+      ui.storageDetails.textContent = `${formatBytes(estimate.usage)} / ${formatBytes(
+        estimate.quota
+      )}`;
+    } else {
+      ui.storageDetails.textContent = "Unavailable";
+    }
+  }
 }
 
+/**
+ * Ensure the model file is present in cache.
+ * @returns {Promise<Response>}
+ */
 async function ensureModelCached() {
   const cache = await caches.open(MODEL_CACHE);
   const cached = await cache.match(MODEL_URL);
@@ -53,6 +115,10 @@ async function ensureModelCached() {
   throw new Error("Model not cached");
 }
 
+/**
+ * Download and cache the model file.
+ * @returns {Promise<void>}
+ */
 async function downloadModel() {
   setMessage("Downloading model…");
   const response = await fetch(MODEL_URL, { cache: "no-store" });
@@ -66,6 +132,10 @@ async function downloadModel() {
   setMessage("Model cached for offline use.");
 }
 
+/**
+ * Fetch the model size and update the download button label.
+ * @returns {Promise<void>}
+ */
 async function updateModelSize() {
   try {
     const response = await fetch(MODEL_URL, { method: "HEAD" });
@@ -80,10 +150,18 @@ async function updateModelSize() {
   }
 }
 
+/**
+ * Detect WebGPU support.
+ * @returns {boolean}
+ */
 function supportsWebGPU() {
   return "gpu" in navigator;
 }
 
+/**
+ * Initialize WebGPU and obtain a device.
+ * @returns {Promise<boolean>}
+ */
 async function initWebGPU() {
   if (!supportsWebGPU()) {
     ui.webgpuStatus.textContent = "Unavailable";
@@ -109,6 +187,10 @@ async function initWebGPU() {
   }
 }
 
+/**
+ * Run a simple compute shader to estimate device performance.
+ * @returns {Promise<{score: number}>}
+ */
 async function runSelfTest() {
   if (!state.gpuDevice) return { score: 0 };
   const start = performance.now();
@@ -155,6 +237,12 @@ async function runSelfTest() {
   return { score: end - start };
 }
 
+/**
+ * Estimate a profile based on GPU limits and self-test time.
+ * @param {number} selfTestMs
+ * @param {number} maxBufferSize
+ * @returns {string}
+ */
 function estimateProfile(selfTestMs, maxBufferSize) {
   const isIPhone = /iPhone/.test(navigator.userAgent);
   if (isIPhone) {
@@ -178,6 +266,10 @@ function estimateProfile(selfTestMs, maxBufferSize) {
   return "High";
 }
 
+/**
+ * Detect the device profile using runtime checks.
+ * @returns {Promise<string>}
+ */
 async function detectProfile() {
   if (!state.gpuDevice) return "UltraLow";
   const selfTest = await runSelfTest();
@@ -185,16 +277,71 @@ async function detectProfile() {
   return estimateProfile(selfTest.score, maxBufferSize);
 }
 
+/**
+ * Update the generation progress bar.
+ * @param {number} value
+ */
 function updateProgress(value) {
   ui.progress.hidden = false;
   ui.progressBar.style.width = `${value}%`;
 }
 
+/**
+ * Reset the progress bar to the hidden state.
+ */
 function resetProgress() {
   ui.progress.hidden = true;
   ui.progressBar.style.width = "0%";
 }
 
+/**
+ * Update the device profile hint copy.
+ */
+function updateDeviceProfileHint() {
+  if (!ui.deviceProfileHint) return;
+  ui.deviceProfileHint.textContent = `Detected device profile: ${state.deviceProfile}. You can override it if your hardware can handle more.`;
+}
+
+/**
+ * Show a warning if the current settings exceed detected device limits.
+ */
+function updatePerformanceWarning() {
+  if (!ui.performanceWarning) return;
+  const deviceLimits = PROFILE_LIMITS[state.deviceProfile];
+  if (!deviceLimits) return;
+
+  const deviceIndex = PROFILES.indexOf(state.deviceProfile);
+  const selectedIndex = PROFILES.indexOf(state.selectedProfile);
+  const selectedSteps = Number(ui.steps.value);
+  const selectedResolution = Number(ui.resolution.value);
+  const maxDeviceSteps = Math.max(...deviceLimits.steps);
+  const maxDeviceResolution = Math.max(...deviceLimits.resolutions);
+
+  const warnings = [];
+  if (selectedIndex > deviceIndex) {
+    warnings.push("Profile higher than the detected device capability.");
+  }
+  if (selectedSteps > maxDeviceSteps) {
+    warnings.push(`Steps exceed the detected safe limit (${maxDeviceSteps}).`);
+  }
+  if (selectedResolution > maxDeviceResolution) {
+    warnings.push(`Resolution exceeds the detected safe limit (${maxDeviceResolution}px).`);
+  }
+
+  if (warnings.length === 0) {
+    ui.performanceWarning.hidden = true;
+    ui.performanceWarning.textContent = "";
+    return;
+  }
+  ui.performanceWarning.hidden = false;
+  ui.performanceWarning.textContent = `Performance warning: ${warnings.join(" ")}`;
+}
+
+/**
+ * Generate an image using a compute shader.
+ * @param {{resolution: number, steps: number, seed: number}} params
+ * @returns {Promise<void>}
+ */
 async function generateImage({ resolution, steps, seed }) {
   if (!state.gpuDevice) {
     throw new Error("WebGPU device not available");
@@ -320,6 +467,9 @@ async function generateImage({ resolution, steps, seed }) {
   resetProgress();
 }
 
+/**
+ * Reduce UI settings to lower resolutions/steps after failures.
+ */
 function degradeSettings() {
   const limits = PROFILE_LIMITS[state.selectedProfile];
   const currentRes = Number(ui.resolution.value);
@@ -334,8 +484,14 @@ function degradeSettings() {
   }
   ui.negativePrompt.value = "";
   clampText();
+  updatePerformanceWarning();
 }
 
+/**
+ * Run the generation flow with optional retry logic.
+ * @param {{retryOnFailure: boolean}} options
+ * @returns {Promise<void>}
+ */
 async function runGenerationFlow({ retryOnFailure }) {
   const prompt = ui.prompt.value.trim();
   if (!prompt) {
@@ -392,6 +548,10 @@ async function runGenerationFlow({ retryOnFailure }) {
   }
 }
 
+/**
+ * Copy the last generated image to the clipboard.
+ * @returns {Promise<void>}
+ */
 async function copyToClipboard() {
   if (!state.latestImageBitmap) {
     setMessage("Nothing to copy yet.");
@@ -410,6 +570,10 @@ async function copyToClipboard() {
   }
 }
 
+/**
+ * Download the last generated image as PNG.
+ * @returns {Promise<void>}
+ */
 async function downloadImage() {
   const blob = await new Promise((resolve) =>
     ui.output.toBlob(resolve, "image/png")
@@ -423,6 +587,9 @@ async function downloadImage() {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Register the service worker for offline support.
+ */
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(() => {
@@ -431,13 +598,19 @@ function registerServiceWorker() {
   }
 }
 
+/**
+ * Wire up all UI event handlers.
+ */
 function wireEvents() {
   ui.powerSelect.addEventListener("change", (event) => {
     const value = event.target.value;
     applyProfile(value);
+    updatePerformanceWarning();
   });
   ui.prompt.addEventListener("input", clampText);
   ui.negativePrompt.addEventListener("input", clampText);
+  ui.resolution.addEventListener("change", updatePerformanceWarning);
+  ui.steps.addEventListener("change", updatePerformanceWarning);
   ui.seedAuto.addEventListener("click", () => {
     ui.seed.value = "";
   });
@@ -477,14 +650,25 @@ function wireEvents() {
     setMessage("Model cache cleared.");
   });
   ui.clearAll.addEventListener("click", async () => {
-    await caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))));
+    await caches
+      .keys()
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))));
     ui.modelStatus.textContent = "Not loaded";
     await updateCacheStatus();
     setMessage("All app data cleared.");
   });
-  ui.presetFast.addEventListener("click", () => setPreset("fast"));
-  ui.presetBalanced.addEventListener("click", () => setPreset("balanced"));
-  ui.presetBest.addEventListener("click", () => setPreset("best"));
+  ui.presetFast.addEventListener("click", () => {
+    setPreset("fast");
+    updatePerformanceWarning();
+  });
+  ui.presetBalanced.addEventListener("click", () => {
+    setPreset("balanced");
+    updatePerformanceWarning();
+  });
+  ui.presetBest.addEventListener("click", () => {
+    setPreset("best");
+    updatePerformanceWarning();
+  });
 
   ui.timeoutReduce.addEventListener("click", () => {
     ui.timeoutDialog.close();
@@ -503,6 +687,10 @@ function wireEvents() {
   });
 }
 
+/**
+ * Initialize the application.
+ * @returns {Promise<void>}
+ */
 async function init() {
   registerServiceWorker();
   wireEvents();
@@ -519,6 +707,8 @@ async function init() {
   state.selectedProfile = state.deviceProfile;
   applyProfile(state.selectedProfile);
   ui.profileStatus.textContent = `${state.selectedProfile} (auto)`;
+  updateDeviceProfileHint();
+  updatePerformanceWarning();
   await updateCacheStatus();
 
   try {
